@@ -16,6 +16,10 @@ import (
 
 type RoomId string
 
+func (id RoomId) String() string {
+	return string(id)
+}
+
 type Room struct {
 	Name    string
 	Options *proto_lobby.RoomOptions
@@ -37,30 +41,28 @@ func NewLobbyServiceHandlers() *lobbyServiceHandlers {
 
 func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 	return service.MessageHandlerFunc(func(msg *proto.Message) *proto.Message {
-		createRoomRequest, err := proto_lobby.AsCreateRoomRequest(msg)
+		var request proto_lobby.CreateRoomRequest
+		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
 			return nil
 		}
-		authHeader, err := proto_headers.GetAuthorizationHeader(msg)
+		var authHeader proto_headers.AuthorizationHeader
+		_, err = msg.Header.Unmarshal(&authHeader)
 		if err != nil {
 			log.Println(err)
 			return nil
-		} else if authHeader == nil {
-			log.Println("Missing required header: AuthorizationHeader")
-			return nil
 		}
-		s.addRoom(authHeader.GetUserId(), createRoomRequest.GetName(), createRoomRequest.GetOptions())
+		s.addRoom(authHeader.GetUserId(), request.GetName(), request.GetOptions())
 		response := proto_lobby.CreateRoomResponse{
-			Name:    pbuf.String(createRoomRequest.GetName()),
-			Options: createRoomRequest.GetOptions(),
+			Name:    pbuf.String(request.GetName()),
+			Options: request.GetOptions(),
 		}
-		responseData, err := pbuf.Marshal(&response)
+		responseMsg, err := proto.Marshal(&response)
 		if err != nil {
 			log.Println(err)
 			return nil
 		}
-		responseMsg := proto.NewMessage(proto_lobby.CreateRoomResponseMessage, responseData)
 		return responseMsg
 	})
 }
@@ -81,7 +83,8 @@ func newRoomId() RoomId {
 
 func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 	return service.MessageHandlerFunc(func(msg *proto.Message) *proto.Message {
-		_, err := proto_lobby.AsListRoomsRequest(msg)
+		var request proto_lobby.ListRoomsRequest
+		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
 			return nil
@@ -89,12 +92,11 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		response := proto_lobby.ListRoomsResponse{
 			Rooms: s.listRooms(),
 		}
-		responseData, err := pbuf.Marshal(&response)
+		responseMsg, err := proto.Marshal(&response)
 		if err != nil {
 			log.Println(err)
 			return nil
 		}
-		responseMsg := proto.NewMessage(proto_lobby.ListRoomsResponseMessage, responseData)
 		return responseMsg
 	})
 }
