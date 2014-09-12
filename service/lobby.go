@@ -20,8 +20,9 @@ func NewLobbyServiceHandlers() *lobbyServiceHandlers {
 	}
 }
 
-func WithAuth(h func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.Message) service.MessageHandler {
-	return service.MessageHandlerFunc(func(msg *proto.Message) *proto.Message {
+func WithAuth(h func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.CompositeMessage) service.MessageHandler {
+
+	return service.MessageHandlerFunc(func(msg *proto.Message) *proto.CompositeMessage {
 		var authHeader proto_headers.AuthorizationHeader
 		_, err := msg.Header.Unmarshal(&authHeader)
 		if err != nil {
@@ -33,7 +34,7 @@ func WithAuth(h func(auth *proto_headers.AuthorizationHeader, msg *proto.Message
 }
 
 func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
-	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.Message {
+	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.CompositeMessage {
 		var request proto_lobby.CreateRoomRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
@@ -44,17 +45,12 @@ func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 		response := proto_lobby.CreateRoomResponse{
 			Room: room,
 		}
-		responseMsg, err := proto.Marshal(&response)
-		if err != nil {
-			log.Println(err)
-			return nil
-		}
-		return responseMsg
+		return &proto.CompositeMessage{Message: &response}
 	})
 }
 
 func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
-	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.Message {
+	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.CompositeMessage {
 		var request proto_lobby.JoinRoomRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
@@ -67,17 +63,12 @@ func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
 		response := proto_lobby.JoinRoomResponse{
 			Room: room,
 		}
-		responseMsg, err := proto.Marshal(&response)
-		if err != nil {
-			log.Println(err)
-			return nil
-		}
-		return responseMsg
+		return &proto.CompositeMessage{Message: &response}
 	})
 }
 
 func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
-	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.Message {
+	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) *proto.CompositeMessage {
 		var request proto_lobby.ListRoomsRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
@@ -87,11 +78,6 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		response := proto_lobby.ListRoomsResponse{
 			Rooms: s.roomList.ListRoomsExcluding(auth.GetUserId()),
 		}
-		responseMsg, err := proto.Marshal(&response)
-		if err != nil {
-			log.Println(err)
-			return nil
-		}
-		return responseMsg
+		return &proto.CompositeMessage{Message: &response}
 	})
 }
