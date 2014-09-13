@@ -27,6 +27,8 @@ type room struct {
 }
 
 func (r *room) Proto() *proto_lobby.Room {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	return &proto_lobby.Room{
 		Id:      pbuf.String(r.id.String()),
 		Name:    &r.name,
