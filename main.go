@@ -34,6 +34,7 @@ func main() {
 	handlers := service.NewLobbyServiceHandlers()
 	lobbyService.AddHandler(proto_lobby.CreateRoomRequestMessage, handlers.CreateRoomHandler())
 	lobbyService.AddHandler(proto_lobby.JoinRoomRequestMessage, handlers.JoinRoomHandler())
+	lobbyService.AddHandler(proto_lobby.LeaveRoomRequestMessage, handlers.LeaveRoomHandler())
 	lobbyService.AddHandler(proto_lobby.ListRoomsRequestMessage, handlers.ListRoomsHandler())
 
 	err := lobbyService.Start()

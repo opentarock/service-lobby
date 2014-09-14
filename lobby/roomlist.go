@@ -18,12 +18,13 @@ func (r RoomId) String() string {
 }
 
 type room struct {
-	id      RoomId
-	name    string
-	options *proto_lobby.RoomOptions
-	owner   uint64
-	players []uint64
-	lock    *sync.Mutex
+	id         RoomId
+	name       string
+	options    *proto_lobby.RoomOptions
+	owner      uint64
+	maxPlayers uint
+	players    []uint64
+	lock       *sync.Mutex
 }
 
 func (r *room) Proto() *proto_lobby.Room {
@@ -36,6 +37,10 @@ func (r *room) Proto() *proto_lobby.Room {
 		Owner:   fetchPlayerInfo(r.owner),
 		Players: fetchPlayersInfo(r.players),
 	}
+}
+
+func (r *room) CountPlayers() uint {
+	return uint(1 + len(r.players))
 }
 
 // TODO: real implementation should get nicknames from user service.
@@ -56,54 +61,111 @@ func fetchPlayersInfo(userIds []uint64) []*proto_lobby.Player {
 
 type Rooms map[RoomId]*room
 
-type Players map[uint64]*room
+type Players map[uint64]RoomId
 
 type RoomList struct {
-	rooms     Rooms
-	roomsLock *sync.RWMutex
+	rooms       Rooms
+	roomsLock   *sync.RWMutex
+	players     Players
+	playersLock *sync.RWMutex
 }
 
 func NewRoomList() *RoomList {
 	return &RoomList{
-		rooms:     make(Rooms),
-		roomsLock: new(sync.RWMutex),
+		rooms:       make(Rooms),
+		roomsLock:   new(sync.RWMutex),
+		players:     make(Players),
+		playersLock: new(sync.RWMutex),
 	}
 }
 
 func (r *RoomList) CreateRoom(
-	userId uint64, roomName string, options *proto_lobby.RoomOptions) *proto_lobby.Room {
+	userId uint64,
+	roomName string,
+	options *proto_lobby.RoomOptions) (*proto_lobby.Room, proto_lobby.CreateRoomResponse_ErrorCode) {
 
-	log.Printf("User [id=%d] created a room [name=%s]", userId, roomName)
-	roomId := newRoomId()
-	room := &room{
-		id:      roomId,
-		name:    roomName,
-		options: options,
-		owner:   userId,
-		players: make([]uint64, 0, 4),
-		lock:    new(sync.Mutex),
+	if r.isPlayerInRoom(userId) {
+		return nil, proto_lobby.CreateRoomResponse_ALREADY_IN_ROOM
 	}
+
+	roomId := newRoomId()
+	log.Printf("User [id=%d] created a room [id=%s]", userId, roomId)
+	room := &room{
+		id:         roomId,
+		name:       roomName,
+		options:    options,
+		owner:      userId,
+		maxPlayers: 4,
+		players:    make([]uint64, 0, 4),
+		lock:       new(sync.Mutex),
+	}
+	r.setPlayerRoom(userId, roomId)
 	r.roomsLock.Lock()
 	defer r.roomsLock.Unlock()
 	r.rooms[roomId] = room
-	return room.Proto()
+	return room.Proto(), 0
 }
 
 func newRoomId() RoomId {
 	return RoomId(uuid.New())
 }
 
-func (r *RoomList) JoinRoom(userId uint64, roomId RoomId) *proto_lobby.Room {
+func (r *RoomList) JoinRoom(
+	userId uint64,
+	roomId RoomId) (*proto_lobby.Room, proto_lobby.JoinRoomResponse_ErrorCode) {
+
 	room := r.findRoom(roomId)
+	if r.isPlayerInRoom(userId) {
+		leaveRoom(room, userId)
+	}
+	if room == nil {
+		return nil, proto_lobby.JoinRoomResponse_ROOM_DOES_NOT_EXIST
+	} else if room.CountPlayers() == room.maxPlayers {
+		return nil, proto_lobby.JoinRoomResponse_ROOM_FULL
+	}
+	r.setPlayerRoom(userId, roomId)
 	joinRoom(room, userId)
-	return room.Proto()
+	return room.Proto(), 0
 }
 
 func joinRoom(room *room, userId uint64) {
-	log.Printf("User [id=%d] joined room [name=%s]", userId, room.name)
 	room.lock.Lock()
 	defer room.lock.Unlock()
 	room.players = append(room.players, userId)
+	log.Printf("User [id=%d] joined room [id=%s]", userId, room.id)
+}
+
+func (r *RoomList) LeaveRoom(userId uint64) (bool, proto_lobby.LeaveRoomResponse_ErrorCode) {
+	roomId := r.findPlayerRoom(userId)
+	room := r.findRoom(roomId)
+	if room == nil {
+		return false, proto_lobby.LeaveRoomResponse_NOT_IN_ROOM
+	}
+	r.removePlayerRoom(userId)
+	leaveRoom(room, userId)
+	return true, 0
+}
+
+func leaveRoom(room *room, userId uint64) {
+	room.lock.Lock()
+	defer room.lock.Unlock()
+	if room.owner == userId {
+		room.owner = room.players[0]
+		room.players = room.players[1:]
+	} else {
+		room.players = removeElem(room.players, userId)
+	}
+	log.Printf("User [id=%d] left room [id=%s]", userId, room.id)
+}
+
+func removeElem(s []uint64, x uint64) []uint64 {
+	result := make([]uint64, 0)
+	for _, elem := range s {
+		if elem != x {
+			result = append(result, elem)
+		}
+	}
+	return result
 }
 
 func (r *RoomList) ListRoomsExcluding(userId uint64) []*proto_lobby.Room {
@@ -123,4 +185,26 @@ func (r *RoomList) findRoom(roomId RoomId) *room {
 	r.roomsLock.RLock()
 	defer r.roomsLock.RUnlock()
 	return r.rooms[roomId]
+}
+
+func (r *RoomList) findPlayerRoom(userId uint64) RoomId {
+	r.playersLock.RLock()
+	defer r.playersLock.RUnlock()
+	return r.players[userId]
+}
+
+func (r *RoomList) isPlayerInRoom(userId uint64) bool {
+	return r.findPlayerRoom(userId) != ""
+}
+
+func (r *RoomList) setPlayerRoom(userId uint64, roomId RoomId) {
+	r.playersLock.Lock()
+	defer r.playersLock.Unlock()
+	r.players[userId] = roomId
+}
+
+func (r *RoomList) removePlayerRoom(userId uint64) {
+	r.playersLock.Lock()
+	defer r.playersLock.Unlock()
+	delete(r.players, userId)
 }
