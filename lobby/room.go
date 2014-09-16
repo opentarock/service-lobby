@@ -122,6 +122,9 @@ func (r *Room) NumPlayers() uint {
 	return uint(1 + len(r.players))
 }
 
+// Proto converts a Room internal representation to a Protobuf representation
+// suitable for sending as a service response.
+// TODO: needs testing
 func (r *Room) Proto() *proto_lobby.Room {
 	r.lock.Lock()
 	defer r.lock.Unlock()
