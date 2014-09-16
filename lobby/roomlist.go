@@ -8,6 +8,8 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	pbuf "code.google.com/p/gogoprotobuf/proto"
 
+	"github.com/opentarock/service-api/go/client"
+	"github.com/opentarock/service-api/go/proto"
 	"github.com/opentarock/service-api/go/proto_lobby"
 )
 
@@ -39,6 +41,15 @@ func (r *room) Proto() *proto_lobby.Room {
 	}
 }
 
+func (r *room) GetUserIds() []uint64 {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	result := make([]uint64, 1+len(r.players))
+	result[0] = r.owner
+	copy(result[1:], r.players)
+	return result
+}
+
 func (r *room) CountPlayers() uint {
 	return uint(1 + len(r.players))
 }
@@ -64,18 +75,20 @@ type Rooms map[RoomId]*room
 type Players map[uint64]RoomId
 
 type RoomList struct {
-	rooms       Rooms
-	roomsLock   *sync.RWMutex
-	players     Players
-	playersLock *sync.RWMutex
+	rooms        Rooms
+	roomsLock    *sync.RWMutex
+	players      Players
+	playersLock  *sync.RWMutex
+	notifyClient client.NotifyClient
 }
 
-func NewRoomList() *RoomList {
+func NewRoomList(notifyClient client.NotifyClient) *RoomList {
 	return &RoomList{
-		rooms:       make(Rooms),
-		roomsLock:   new(sync.RWMutex),
-		players:     make(Players),
-		playersLock: new(sync.RWMutex),
+		rooms:        make(Rooms),
+		roomsLock:    new(sync.RWMutex),
+		players:      make(Players),
+		playersLock:  new(sync.RWMutex),
+		notifyClient: notifyClient,
 	}
 }
 
@@ -124,7 +137,11 @@ func (r *RoomList) JoinRoom(
 		return nil, proto_lobby.JoinRoomResponse_ROOM_FULL
 	}
 	r.setPlayerRoom(userId, roomId)
+	usersInRoom := room.GetUserIds()
 	joinRoom(room, userId)
+	r.notifyAsync(&proto_lobby.JoinRoomEvent{
+		Player: fetchPlayerInfo(userId),
+	}, usersInRoom...)
 	return room.Proto(), 0
 }
 
@@ -143,6 +160,9 @@ func (r *RoomList) LeaveRoom(userId uint64) (bool, proto_lobby.LeaveRoomResponse
 	}
 	r.removePlayerRoom(userId)
 	leaveRoom(room, userId)
+	r.notifyAsync(&proto_lobby.JoinRoomEvent{
+		Player: fetchPlayerInfo(userId),
+	}, room.GetUserIds()...)
 	return true, 0
 }
 
@@ -181,6 +201,16 @@ func (r *RoomList) ListRoomsExcluding(userId uint64) []*proto_lobby.Room {
 	return roomList
 }
 
+func (r *RoomList) GetRoom(roomId RoomId) *proto_lobby.Room {
+	r.roomsLock.RLock()
+	defer r.roomsLock.RUnlock()
+	room := r.findRoom(roomId)
+	if room != nil {
+		return room.Proto()
+	}
+	return nil
+}
+
 func (r *RoomList) findRoom(roomId RoomId) *room {
 	r.roomsLock.RLock()
 	defer r.roomsLock.RUnlock()
@@ -207,4 +237,14 @@ func (r *RoomList) removePlayerRoom(userId uint64) {
 	r.playersLock.Lock()
 	defer r.playersLock.Unlock()
 	delete(r.players, userId)
+}
+
+func (r *RoomList) notifyAsync(msg proto.ProtobufMessage, users ...uint64) {
+	go func() {
+		// TODO: handle response
+		_, err := r.notifyClient.MessageUsers(msg, users...)
+		if err != nil {
+			log.Printf("Error sensing notifictations to clients: %s", err)
+		}
+	}()
 }

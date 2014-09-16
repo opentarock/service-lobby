@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"runtime/pprof"
 
+	"github.com/opentarock/service-api/go/client"
 	nservice "github.com/opentarock/service-api/go/service"
 
 	"github.com/opentarock/service-api/go/proto_lobby"
@@ -31,11 +32,16 @@ func main() {
 
 	lobbyService := nservice.NewRepService("tcp://*:7001")
 
-	handlers := service.NewLobbyServiceHandlers()
+	notifyClient := client.NewNotifyClientNanomsg()
+	notifyClient.Connect("tcp://localhost:8001")
+	defer notifyClient.Close()
+
+	handlers := service.NewLobbyServiceHandlers(notifyClient)
 	lobbyService.AddHandler(proto_lobby.CreateRoomRequestMessage, handlers.CreateRoomHandler())
 	lobbyService.AddHandler(proto_lobby.JoinRoomRequestMessage, handlers.JoinRoomHandler())
 	lobbyService.AddHandler(proto_lobby.LeaveRoomRequestMessage, handlers.LeaveRoomHandler())
 	lobbyService.AddHandler(proto_lobby.ListRoomsRequestMessage, handlers.ListRoomsHandler())
+	lobbyService.AddHandler(proto_lobby.RoomInfoRequestMessage, handlers.RoomInfoHandler())
 
 	err := lobbyService.Start()
 	if err != nil {

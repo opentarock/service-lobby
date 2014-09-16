@@ -3,6 +3,7 @@ package service
 import (
 	"log"
 
+	"github.com/opentarock/service-api/go/client"
 	"github.com/opentarock/service-api/go/proto"
 	"github.com/opentarock/service-api/go/proto_headers"
 	"github.com/opentarock/service-api/go/proto_lobby"
@@ -14,9 +15,9 @@ type lobbyServiceHandlers struct {
 	roomList *lobby.RoomList
 }
 
-func NewLobbyServiceHandlers() *lobbyServiceHandlers {
+func NewLobbyServiceHandlers(notifyClient client.NotifyClient) *lobbyServiceHandlers {
 	return &lobbyServiceHandlers{
-		roomList: lobby.NewRoomList(),
+		roomList: lobby.NewRoomList(notifyClient),
 	}
 }
 
@@ -102,6 +103,24 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		}
 		response := proto_lobby.ListRoomsResponse{
 			Rooms: s.roomList.ListRoomsExcluding(auth.GetUserId()),
+		}
+		return proto.CompositeMessage{Message: &response}
+	})
+}
+
+func (s *lobbyServiceHandlers) RoomInfoHandler() service.MessageHandler {
+	return service.MessageHandlerFunc(func(msg *proto.Message) proto.CompositeMessage {
+		var request proto_lobby.RoomInfoRequest
+		err := msg.Unmarshal(&request)
+		if err != nil {
+			log.Println(err)
+			return proto.CompositeMessage{}
+		}
+		response := proto_lobby.RoomInfoResponse{
+			Room: s.roomList.GetRoom(lobby.RoomId(request.GetRoomId())),
+		}
+		if response.Room == nil {
+			response.ErrorCode = proto_lobby.RoomInfoResponse_ROOM_DOES_NOT_EXIST.Enum()
 		}
 		return proto.CompositeMessage{Message: &response}
 	})
