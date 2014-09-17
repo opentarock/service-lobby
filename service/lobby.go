@@ -5,6 +5,7 @@ import (
 
 	"github.com/opentarock/service-api/go/client"
 	"github.com/opentarock/service-api/go/proto"
+	"github.com/opentarock/service-api/go/proto_errors"
 	"github.com/opentarock/service-api/go/proto_headers"
 	"github.com/opentarock/service-api/go/proto_lobby"
 	"github.com/opentarock/service-api/go/service"
@@ -25,10 +26,16 @@ func WithAuth(h func(auth *proto_headers.AuthorizationHeader, msg *proto.Message
 
 	return service.MessageHandlerFunc(func(msg *proto.Message) proto.CompositeMessage {
 		var authHeader proto_headers.AuthorizationHeader
-		_, err := msg.Header.Unmarshal(&authHeader)
+		found, err := msg.Header.Unmarshal(&authHeader)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			var msg proto.ProtobufMessage
+			if found {
+				msg = proto_errors.NewMalformedMessageUnpack()
+			} else {
+				msg = proto_errors.NewMissingHeader(authHeader.GetMessageType())
+			}
+			return proto.CompositeMessage{Message: msg}
 		}
 		return h(&authHeader, msg)
 	})
@@ -40,7 +47,7 @@ func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 		room, errCode := s.roomList.CreateRoom(auth.GetUserId(), request.GetName(), request.GetOptions())
 		response := proto_lobby.CreateRoomResponse{
@@ -59,7 +66,7 @@ func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
 		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 
 		room, errCode := s.roomList.JoinRoom(auth.GetUserId(), lobby.RoomId(request.GetRoomId()))
@@ -80,7 +87,7 @@ func (s *lobbyServiceHandlers) LeaveRoomHandler() service.MessageHandler {
 		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 
 		success, errCode := s.roomList.LeaveRoom(auth.GetUserId())
@@ -99,7 +106,7 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 		response := proto_lobby.ListRoomsResponse{
 			Rooms: s.roomList.ListRoomsExcluding(auth.GetUserId()),
@@ -114,7 +121,7 @@ func (s *lobbyServiceHandlers) RoomInfoHandler() service.MessageHandler {
 		err := msg.Unmarshal(&request)
 		if err != nil {
 			log.Println(err)
-			return proto.CompositeMessage{}
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 		response := proto_lobby.RoomInfoResponse{
 			Room: s.roomList.GetRoom(lobby.RoomId(request.GetRoomId())),
