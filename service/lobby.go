@@ -132,3 +132,57 @@ func (s *lobbyServiceHandlers) RoomInfoHandler() service.MessageHandler {
 		return proto.CompositeMessage{Message: &response}
 	})
 }
+
+func (s *lobbyServiceHandlers) StartGameHandler() service.MessageHandler {
+	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) proto.CompositeMessage {
+		var request proto_lobby.StartGameRequest
+		err := msg.Unmarshal(&request)
+		if err != nil {
+			log.Println(err)
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+		}
+		err = s.roomList.StartGame(auth.GetUserId())
+		var errResponse *proto_lobby.StartGameResponse_ErrorCode
+		if err == lobby.ErrNotInRoom {
+			errResponse = proto_lobby.StartGameResponse_NOT_IN_ROOM.Enum()
+		} else if err == lobby.ErrNotOwner {
+			errResponse = proto_lobby.StartGameResponse_NOT_OWNER.Enum()
+		} else if err == lobby.ErrAlreadyStarted {
+			errResponse = proto_lobby.StartGameResponse_ALREADY_STARTED.Enum()
+		} else if err != nil {
+			log.Println("Unknown error: %s", err)
+			return proto.CompositeMessage{Message: proto_errors.NewInternalErrorUnknown()}
+		}
+		response := proto_lobby.StartGameResponse{
+			ErrorCode: errResponse,
+		}
+		return proto.CompositeMessage{Message: &response}
+	})
+}
+
+func (s *lobbyServiceHandlers) PlayerReadyHandler() service.MessageHandler {
+	return WithAuth(func(auth *proto_headers.AuthorizationHeader, msg *proto.Message) proto.CompositeMessage {
+		var request proto_lobby.PlayerReadyRequest
+		err := msg.Unmarshal(&request)
+		if err != nil {
+			log.Println(err)
+			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+		}
+		err = s.roomList.PlayerReady(auth.GetUserId(), request.GetState())
+		var errResponse *proto_lobby.PlayerReadyResponse_ErrorCode
+		if err == lobby.ErrNotInRoom {
+			errResponse = proto_lobby.PlayerReadyResponse_NOT_IN_ROOM.Enum()
+		} else if err == lobby.ErrUnexpectedReady {
+			errResponse = proto_lobby.PlayerReadyResponse_UNEXPECTED.Enum()
+		} else if err == lobby.ErrInvalidStateString {
+			errResponse = proto_lobby.PlayerReadyResponse_INVALID_STATE.Enum()
+		} else if err != nil {
+			log.Println("Unknown error: %s", err)
+			return proto.CompositeMessage{Message: proto_errors.NewInternalErrorUnknown()}
+		}
+		response := proto_lobby.PlayerReadyResponse{
+			ErrorCode: errResponse,
+		}
+		return proto.CompositeMessage{Message: &response}
+	})
+}

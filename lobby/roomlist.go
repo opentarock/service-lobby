@@ -1,8 +1,11 @@
 package lobby
 
 import (
+	"errors"
 	"log"
 	"sync"
+
+	pbuf "code.google.com/p/gogoprotobuf/proto"
 
 	"github.com/opentarock/service-api/go/client"
 	"github.com/opentarock/service-api/go/proto"
@@ -85,7 +88,8 @@ func (r *RoomList) LeaveRoom(userId uint64) (bool, proto_lobby.LeaveRoomResponse
 		return false, proto_lobby.LeaveRoomResponse_NOT_IN_ROOM
 	}
 	r.removePlayerRoom(userId)
-	if notEmpty := room.Leave(userId); !notEmpty {
+	// TODO: handle error
+	if notEmpty, _ := room.Leave(userId); !notEmpty {
 		r.removeRoom(roomId)
 	}
 	log.Printf("User [id=%d] left room [id=%s]", userId, room.id)
@@ -116,6 +120,67 @@ func (r *RoomList) GetRoom(roomId RoomId) *proto_lobby.Room {
 		return room.Proto()
 	}
 	return nil
+}
+
+var (
+	ErrNotInRoom = errors.New("User must create a room before starting the game")
+	ErrNotOwner  = errors.New("Only owner can start the game")
+)
+
+func (r *RoomList) StartGame(userId uint64) error {
+	if !r.isPlayerInRoom(userId) {
+		return ErrNotInRoom
+	}
+	room := r.getPlayerRoom(userId)
+	if room.GetOwner() != userId {
+		return ErrNotOwner
+	}
+	log.Printf("Owner [id=%d] started the game in room [id=%s]", userId, room.GetId())
+	userState, err := room.StartGame()
+	if err != nil {
+		return err
+	}
+	r.notifyGameStart(room, userState)
+	return nil
+}
+
+func (r *RoomList) notifyGameStart(room *Room, userState map[uint64]string) {
+	for _, userId := range room.GetNonOwnerUserIds() {
+		log.Printf("State for user [id=%d] is %s", userId, userState[userId])
+		r.notifyAsync(&proto_lobby.StartGameEvent{
+			RoomId: pbuf.String(room.GetId().String()),
+			State:  pbuf.String(userState[userId]),
+		}, userId)
+	}
+}
+
+func (r *RoomList) PlayerReady(userId uint64, state string) error {
+	if !r.isPlayerInRoom(userId) {
+		return ErrNotInRoom
+	}
+	room := r.getPlayerRoom(userId)
+	err := room.PlayerReady(userId, state)
+	if err != nil {
+		return err
+	}
+	log.Printf("Player [id=%d] in room [id=%s] is ready", userId, room.GetId())
+	r.notifyPlayerReady(room, userId)
+	return nil
+}
+
+func (r *RoomList) notifyPlayerReady(room *Room, readyUserId uint64) {
+	for _, userId := range room.GetUserIds() {
+		if userId == readyUserId {
+			continue
+		}
+		r.notifyAsync(&proto_lobby.PlayerReadyEvent{
+			UserId: &userId,
+		}, userId)
+	}
+}
+
+func (r *RoomList) getPlayerRoom(userId uint64) *Room {
+	return r.findRoom(r.findPlayerRoom(userId))
 }
 
 func (r *RoomList) findRoom(roomId RoomId) *Room {
@@ -157,7 +222,7 @@ func (r *RoomList) notifyAsync(msg proto.ProtobufMessage, users ...uint64) {
 		// TODO: handle response
 		_, err := r.notifyClient.MessageUsers(msg, users...)
 		if err != nil {
-			log.Printf("Error sensing notifictations to clients: %s", err)
+			log.Printf("Error sending notifictations to clients: %s", err)
 		}
 	}()
 }

@@ -42,6 +42,8 @@ func main() {
 	lobbyService.AddHandler(proto_lobby.LeaveRoomRequestMessage, handlers.LeaveRoomHandler())
 	lobbyService.AddHandler(proto_lobby.ListRoomsRequestMessage, handlers.ListRoomsHandler())
 	lobbyService.AddHandler(proto_lobby.RoomInfoRequestMessage, handlers.RoomInfoHandler())
+	lobbyService.AddHandler(proto_lobby.StartGameRequestMessage, handlers.StartGameHandler())
+	lobbyService.AddHandler(proto_lobby.PlayerReadyRequestMessage, handlers.PlayerReadyHandler())
 
 	err := lobbyService.Start()
 	if err != nil {
