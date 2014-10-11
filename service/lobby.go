@@ -9,6 +9,7 @@ import (
 	"github.com/opentarock/service-api/go/proto_headers"
 	"github.com/opentarock/service-api/go/proto_lobby"
 	"github.com/opentarock/service-api/go/service"
+	"github.com/opentarock/service-api/go/user"
 	"github.com/opentarock/service-lobby/lobby"
 )
 
@@ -49,7 +50,7 @@ func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 			log.Println(err)
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
-		room, errCode := s.roomList.CreateRoom(auth.GetUserId(), request.GetName(), request.GetOptions())
+		room, errCode := s.roomList.CreateRoom(user.Id(auth.GetUserId()), request.GetName(), request.GetOptions())
 		response := proto_lobby.CreateRoomResponse{
 			Room: room,
 		}
@@ -69,7 +70,7 @@ func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 
-		room, errCode := s.roomList.JoinRoom(auth.GetUserId(), lobby.RoomId(request.GetRoomId()))
+		room, errCode := s.roomList.JoinRoom(user.Id(auth.GetUserId()), lobby.RoomId(request.GetRoomId()))
 
 		response := proto_lobby.JoinRoomResponse{
 			Room: room,
@@ -90,7 +91,7 @@ func (s *lobbyServiceHandlers) LeaveRoomHandler() service.MessageHandler {
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 
-		success, errCode := s.roomList.LeaveRoom(auth.GetUserId())
+		success, errCode := s.roomList.LeaveRoom(user.Id(auth.GetUserId()))
 
 		response := proto_lobby.LeaveRoomResponse{}
 		if !success {
@@ -109,7 +110,7 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
 		response := proto_lobby.ListRoomsResponse{
-			Rooms: s.roomList.ListRoomsExcluding(auth.GetUserId()),
+			Rooms: s.roomList.ListRoomsExcluding(user.Id(auth.GetUserId())),
 		}
 		return proto.CompositeMessage{Message: &response}
 	})
@@ -141,7 +142,7 @@ func (s *lobbyServiceHandlers) StartGameHandler() service.MessageHandler {
 			log.Println(err)
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
-		err = s.roomList.StartGame(auth.GetUserId())
+		err = s.roomList.StartGame(user.Id(auth.GetUserId()))
 		var errResponse *proto_lobby.StartGameResponse_ErrorCode
 		if err == lobby.ErrNotInRoom {
 			errResponse = proto_lobby.StartGameResponse_NOT_IN_ROOM.Enum()
@@ -168,7 +169,7 @@ func (s *lobbyServiceHandlers) PlayerReadyHandler() service.MessageHandler {
 			log.Println(err)
 			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
 		}
-		err = s.roomList.PlayerReady(auth.GetUserId(), request.GetState())
+		err = s.roomList.PlayerReady(user.Id(auth.GetUserId()), request.GetState())
 		var errResponse *proto_lobby.PlayerReadyResponse_ErrorCode
 		if err == lobby.ErrNotInRoom {
 			errResponse = proto_lobby.PlayerReadyResponse_NOT_IN_ROOM.Enum()

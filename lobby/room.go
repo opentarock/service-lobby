@@ -11,6 +11,7 @@ import (
 	pbuf "code.google.com/p/gogoprotobuf/proto"
 
 	"github.com/opentarock/service-api/go/proto_lobby"
+	"github.com/opentarock/service-api/go/user"
 	"github.com/opentarock/service-lobby/util"
 )
 
@@ -35,9 +36,9 @@ type Room struct {
 	id           RoomId
 	name         string
 	options      *proto_lobby.RoomOptions
-	owner        uint64
+	owner        user.Id
 	maxPlayers   uint
-	players      map[uint64]string
+	players      map[user.Id]string
 	status       roomStatus
 	ready        *PlayersReady
 	ReadyTimeout time.Duration
@@ -46,13 +47,13 @@ type Room struct {
 
 // NewRoom returns a new Room with a given name, owner and max players allowed.
 // Room id is automatically generated and can be accessed using GetId().
-func NewRoom(name string, owner uint64, maxPlayers uint) *Room {
+func NewRoom(name string, owner user.Id, maxPlayers uint) *Room {
 	return &Room{
 		id:           newRoomId(),
 		name:         name,
 		owner:        owner,
 		maxPlayers:   maxPlayers,
-		players:      make(map[uint64]string),
+		players:      make(map[user.Id]string),
 		status:       notStarted,
 		ReadyTimeout: readyTimeout,
 		lock:         new(sync.Mutex),
@@ -90,7 +91,7 @@ func (r *Room) IsStarted() bool {
 // the room Join is a NOOP.
 // User can join the room regardless of the room's current status. If the player
 // ready process is in progress joined user is automatically considered ready.
-func (r *Room) Join(userId uint64) error {
+func (r *Room) Join(userId user.Id) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if r.numPlayers() == r.maxPlayers {
@@ -109,14 +110,14 @@ var ErrGameStartInProgress = errors.New("Game start in progress")
 // is returned indicating that there are no more players in the room.
 // If the game start is in progress the user that is part of the player ready process
 // can't leave the room untill the process is not complete.
-func (r *Room) Leave(userId uint64) (bool, error) {
+func (r *Room) Leave(userId user.Id) (bool, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if r.ready != nil && r.ready.HasUser(userId) {
 		return true, ErrGameStartInProgress
 	}
 	if r.numPlayers() == 1 {
-		r.owner = 0
+		r.owner = ""
 		return false, nil
 	}
 	// If the user leaving is the owner we choose a new one.
@@ -132,20 +133,20 @@ func (r *Room) Leave(userId uint64) (bool, error) {
 // takeOne takes one key from the input map and returns it.
 // If the map is empty zero is returned. There is no specified order in which
 // the key is selected.
-func takeOne(m map[uint64]string) uint64 {
+func takeOne(m map[user.Id]string) user.Id {
 	for key, _ := range m {
 		return key
 	}
-	return 0
+	return ""
 }
 
 // Getowner return the current room owner user id.
-func (r *Room) GetOwner() uint64 {
+func (r *Room) GetOwner() user.Id {
 	return r.owner
 }
 
 // GetUserIds returns user ids of all the players currently in the room.
-func (r *Room) GetUserIds() []uint64 {
+func (r *Room) GetUserIds() []user.Id {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	result := r.getNonOwnerUserIdsHelper()
@@ -155,7 +156,7 @@ func (r *Room) GetUserIds() []uint64 {
 
 // GetNonOwnerUserIds returns user ids of all the players currently in the room
 // except the owner.
-func (r *Room) GetNonOwnerUserIds() []uint64 {
+func (r *Room) GetNonOwnerUserIds() []user.Id {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	return r.getNonOwnerUserIdsHelper()
@@ -163,10 +164,10 @@ func (r *Room) GetNonOwnerUserIds() []uint64 {
 
 // getNonOwnerUserIdshelper is a helper function that returns user ids of all
 // players currently in the room except the owner without claiming any locks.
-func (r *Room) getNonOwnerUserIdsHelper() []uint64 {
+func (r *Room) getNonOwnerUserIdsHelper() []user.Id {
 	// A little optimization because we use this method in GetUserIds so we
 	// don't have to reallocate.
-	result := make([]uint64, 0, 1+len(r.players))
+	result := make([]user.Id, 0, 1+len(r.players))
 	for userId, _ := range r.players {
 		result = append(result, userId)
 	}
@@ -200,14 +201,14 @@ func (r *Room) Proto() *proto_lobby.Room {
 }
 
 // TODO: real implementation should get nicknames from user service.
-func fetchPlayerInfo(userId uint64) *proto_lobby.Player {
+func fetchPlayerInfo(userId user.Id) *proto_lobby.Player {
 	return &proto_lobby.Player{
-		UserId:   &userId,
+		UserId:   pbuf.String(userId.String()),
 		Nickname: pbuf.String(fmt.Sprintf("nickname %d", userId)),
 	}
 }
 
-func fetchPlayersInfo(userIds map[uint64]string) []*proto_lobby.Player {
+func fetchPlayersInfo(userIds map[user.Id]string) []*proto_lobby.Player {
 	playerInfoList := make([]*proto_lobby.Player, 0, len(userIds))
 	for userId, _ := range userIds {
 		playerInfoList = append(playerInfoList, fetchPlayerInfo(userId))
@@ -223,7 +224,7 @@ var ErrAlreadyStarted = errors.New("Room game already started.")
 // When the ready process is complete game is started.
 // A map of random states for every user is returned that should be sent to
 // the matching users so they can confirm they are ready.
-func (r *Room) StartGame() (map[uint64]string, error) {
+func (r *Room) StartGame() (map[user.Id]string, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if r.status != notStarted {
@@ -262,7 +263,7 @@ func (r *Room) CancelStart() error {
 var ErrUnexpectedReady = errors.New("Unexpected ready.")
 
 // PlayerReady marks the user with given id and state as ready.
-func (r *Room) PlayerReady(userId uint64, state string) error {
+func (r *Room) PlayerReady(userId user.Id, state string) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if r.status != starting {
@@ -303,8 +304,8 @@ func (r *Room) reset() {
 }
 
 // copyMap makes a copy of a map and returns it.
-func copyMap(m map[uint64]string) map[uint64]string {
-	r := make(map[uint64]string)
+func copyMap(m map[user.Id]string) map[user.Id]string {
+	r := make(map[user.Id]string)
 	for k, v := range m {
 		r[k] = v
 	}

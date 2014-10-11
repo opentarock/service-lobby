@@ -10,6 +10,7 @@ import (
 	"github.com/opentarock/service-api/go/client"
 	"github.com/opentarock/service-api/go/proto"
 	"github.com/opentarock/service-api/go/proto_lobby"
+	"github.com/opentarock/service-api/go/user"
 )
 
 type RoomId string
@@ -20,7 +21,7 @@ func (r RoomId) String() string {
 
 type Rooms map[RoomId]*Room
 
-type Players map[uint64]RoomId
+type Players map[user.Id]RoomId
 
 type RoomList struct {
 	rooms        Rooms
@@ -41,7 +42,7 @@ func NewRoomList(notifyClient client.NotifyClient) *RoomList {
 }
 
 func (r *RoomList) CreateRoom(
-	userId uint64,
+	userId user.Id,
 	roomName string,
 	options *proto_lobby.RoomOptions) (*proto_lobby.Room, proto_lobby.CreateRoomResponse_ErrorCode) {
 
@@ -59,7 +60,7 @@ func (r *RoomList) CreateRoom(
 }
 
 func (r *RoomList) JoinRoom(
-	userId uint64,
+	userId user.Id,
 	roomId RoomId) (*proto_lobby.Room, proto_lobby.JoinRoomResponse_ErrorCode) {
 
 	room := r.findRoom(roomId)
@@ -81,7 +82,7 @@ func (r *RoomList) JoinRoom(
 	return room.Proto(), 0
 }
 
-func (r *RoomList) LeaveRoom(userId uint64) (bool, proto_lobby.LeaveRoomResponse_ErrorCode) {
+func (r *RoomList) LeaveRoom(userId user.Id) (bool, proto_lobby.LeaveRoomResponse_ErrorCode) {
 	roomId := r.findPlayerRoom(userId)
 	room := r.findRoom(roomId)
 	if room == nil {
@@ -99,7 +100,7 @@ func (r *RoomList) LeaveRoom(userId uint64) (bool, proto_lobby.LeaveRoomResponse
 	return true, 0
 }
 
-func (r *RoomList) ListRoomsExcluding(userId uint64) []*proto_lobby.Room {
+func (r *RoomList) ListRoomsExcluding(userId user.Id) []*proto_lobby.Room {
 	r.roomsLock.RLock()
 	defer r.roomsLock.RUnlock()
 	roomList := make([]*proto_lobby.Room, 0, len(r.rooms))
@@ -127,7 +128,7 @@ var (
 	ErrNotOwner  = errors.New("Only owner can start the game")
 )
 
-func (r *RoomList) StartGame(userId uint64) error {
+func (r *RoomList) StartGame(userId user.Id) error {
 	if !r.isPlayerInRoom(userId) {
 		return ErrNotInRoom
 	}
@@ -144,7 +145,7 @@ func (r *RoomList) StartGame(userId uint64) error {
 	return nil
 }
 
-func (r *RoomList) notifyGameStart(room *Room, userState map[uint64]string) {
+func (r *RoomList) notifyGameStart(room *Room, userState map[user.Id]string) {
 	for _, userId := range room.GetNonOwnerUserIds() {
 		log.Printf("State for user [id=%d] is %s", userId, userState[userId])
 		r.notifyAsync(&proto_lobby.StartGameEvent{
@@ -154,7 +155,7 @@ func (r *RoomList) notifyGameStart(room *Room, userState map[uint64]string) {
 	}
 }
 
-func (r *RoomList) PlayerReady(userId uint64, state string) error {
+func (r *RoomList) PlayerReady(userId user.Id, state string) error {
 	if !r.isPlayerInRoom(userId) {
 		return ErrNotInRoom
 	}
@@ -163,23 +164,23 @@ func (r *RoomList) PlayerReady(userId uint64, state string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Player [id=%d] in room [id=%s] is ready", userId, room.GetId())
+	log.Printf("Player [id=%s] in room [id=%s] is ready", userId, room.GetId())
 	r.notifyPlayerReady(room, userId)
 	return nil
 }
 
-func (r *RoomList) notifyPlayerReady(room *Room, readyUserId uint64) {
+func (r *RoomList) notifyPlayerReady(room *Room, readyUserId user.Id) {
 	for _, userId := range room.GetUserIds() {
 		if userId == readyUserId {
 			continue
 		}
 		r.notifyAsync(&proto_lobby.PlayerReadyEvent{
-			UserId: &userId,
+			UserId: pbuf.String(userId.String()),
 		}, userId)
 	}
 }
 
-func (r *RoomList) getPlayerRoom(userId uint64) *Room {
+func (r *RoomList) getPlayerRoom(userId user.Id) *Room {
 	return r.findRoom(r.findPlayerRoom(userId))
 }
 
@@ -195,34 +196,34 @@ func (r *RoomList) removeRoom(roomId RoomId) {
 	delete(r.rooms, roomId)
 }
 
-func (r *RoomList) findPlayerRoom(userId uint64) RoomId {
+func (r *RoomList) findPlayerRoom(userId user.Id) RoomId {
 	r.playersLock.RLock()
 	defer r.playersLock.RUnlock()
 	return r.players[userId]
 }
 
-func (r *RoomList) isPlayerInRoom(userId uint64) bool {
+func (r *RoomList) isPlayerInRoom(userId user.Id) bool {
 	return r.findPlayerRoom(userId) != ""
 }
 
-func (r *RoomList) setPlayerRoom(userId uint64, roomId RoomId) {
+func (r *RoomList) setPlayerRoom(userId user.Id, roomId RoomId) {
 	r.playersLock.Lock()
 	defer r.playersLock.Unlock()
 	r.players[userId] = roomId
 }
 
-func (r *RoomList) removePlayerRoom(userId uint64) {
+func (r *RoomList) removePlayerRoom(userId user.Id) {
 	r.playersLock.Lock()
 	defer r.playersLock.Unlock()
 	delete(r.players, userId)
 }
 
-func (r *RoomList) notifyAsync(msg proto.ProtobufMessage, users ...uint64) {
+func (r *RoomList) notifyAsync(msg proto.ProtobufMessage, users ...user.Id) {
 	go func() {
 		// TODO: handle response
-		_, err := r.notifyClient.MessageUsers(msg, users...)
-		if err != nil {
-			log.Printf("Error sending notifictations to clients: %s", err)
-		}
+		//_, err := r.notifyClient.MessageUsers(msg, users...)
+		//if err != nil {
+		//log.Printf("Error sending notifictations to clients: %s", err)
+		//}
 	}()
 }

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opentarock/service-api/go/user"
 	"github.com/opentarock/service-lobby/util"
 
 	"code.google.com/p/go-uuid/uuid"
@@ -12,9 +13,9 @@ import (
 
 // PlayersReady is a helper for managing ready status of players.
 type PlayersReady struct {
-	owner           uint64
-	playerState     map[uint64]string
-	playersReady    map[uint64]bool
+	owner           user.Id
+	playerState     map[user.Id]string
+	playersReady    map[user.Id]bool
 	timeout         *util.CancellableTimeout
 	id              string
 	successCallback func()
@@ -23,12 +24,12 @@ type PlayersReady struct {
 
 // NewPlayersReady return a new PlayersReady  with expected player state and callback function f
 // that is executed when all te players are ready.
-func NewPlayersReady(owner uint64, playerState map[uint64]string, f func()) *PlayersReady {
+func NewPlayersReady(owner user.Id, playerState map[user.Id]string, f func()) *PlayersReady {
 	id := uuid.New()
 	ready := &PlayersReady{
 		owner:           owner,
 		playerState:     playerState,
-		playersReady:    make(map[uint64]bool),
+		playersReady:    make(map[user.Id]bool),
 		id:              id,
 		successCallback: f,
 		lock:            new(sync.Mutex),
@@ -72,7 +73,7 @@ var ErrUnknownUser = errors.New("unknown user.")
 // Ready marks a user with user id as ready if the state matches the expected state
 // for that user.
 // If all the users are ready room's game is started.
-func (r *PlayersReady) Ready(userId uint64, stateReceived string) error {
+func (r *PlayersReady) Ready(userId user.Id, stateReceived string) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if _, ok := r.playersReady[userId]; ok {
@@ -95,7 +96,7 @@ func (r *PlayersReady) Ready(userId uint64, stateReceived string) error {
 }
 
 // HasUser checks if a user is part of this ready process.
-func (r *PlayersReady) HasUser(userId uint64) bool {
+func (r *PlayersReady) HasUser(userId user.Id) bool {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	_, ok := r.playerState[userId]
