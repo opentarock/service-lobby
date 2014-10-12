@@ -14,6 +14,7 @@ import (
 	"github.com/opentarock/service-api/go/service"
 	"github.com/opentarock/service-api/go/user"
 	"github.com/opentarock/service-lobby/lobby"
+	"gopkg.in/inconshreveable/log15.v2"
 )
 
 const (
@@ -41,13 +42,12 @@ func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 		var request proto_lobby.CreateRoomRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		room, errCode := s.roomList.CreateRoom(user.Id(auth.GetUserId()), request.GetName(), request.GetOptions())
@@ -71,13 +71,12 @@ func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
 		var request proto_lobby.JoinRoomRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		room, errCode := s.roomList.JoinRoom(user.Id(auth.GetUserId()), lobby.RoomId(request.GetRoomId()))
@@ -102,13 +101,12 @@ func (s *lobbyServiceHandlers) LeaveRoomHandler() service.MessageHandler {
 		var request proto_lobby.LeaveRoomRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		success, errCode := s.roomList.LeaveRoom(user.Id(auth.GetUserId()))
@@ -131,13 +129,12 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		var request proto_lobby.ListRoomsRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		response := proto_lobby.ListRoomsResponse{
@@ -183,13 +180,12 @@ func (s *lobbyServiceHandlers) StartGameHandler() service.MessageHandler {
 		var request proto_lobby.StartGameRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		err = s.roomList.StartGame(user.Id(auth.GetUserId()))
@@ -221,13 +217,12 @@ func (s *lobbyServiceHandlers) PlayerReadyHandler() service.MessageHandler {
 		var request proto_lobby.PlayerReadyRequest
 		err := msg.Unmarshal(&request)
 		if err != nil {
-			logger.Error("Malformed request", "error", err)
-			return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+			return newMalformedMessageError(logger, request.GetMessageType(), err)
 		}
 
 		auth, ok := reqcontext.AuthFromContext(ctx)
 		if !ok {
-			return missingAuthHeaderError()
+			return missingAuthHeaderError(logger)
 		}
 
 		err = s.roomList.PlayerReady(user.Id(auth.GetUserId()), request.GetState())
@@ -249,8 +244,15 @@ func (s *lobbyServiceHandlers) PlayerReadyHandler() service.MessageHandler {
 	})
 }
 
-func missingAuthHeaderError() proto.CompositeMessage {
+func newMalformedMessageError(logger log15.Logger, msgType proto.Type, err error) proto.CompositeMessage {
+	logger.Error("Malformed request", "error", err, "msg_type", msgType)
+	return proto.CompositeMessage{Message: proto_errors.NewMalformedMessageUnpack()}
+}
+
+func missingAuthHeaderError(logger log15.Logger) proto.CompositeMessage {
+	headerType := proto_headers.AuthorizationHeaderMessage
+	logger.Error("Missing authorization header", "msg_type", headerType)
 	return proto.CompositeMessage{
-		Message: proto_errors.NewMissingHeader(proto_headers.AuthorizationHeaderMessage),
+		Message: proto_errors.NewMissingHeader(headerType),
 	}
 }
