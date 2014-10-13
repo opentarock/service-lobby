@@ -37,7 +37,7 @@ func (s *lobbyServiceHandlers) CreateRoomHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.CreateRoomRequest
 		err := msg.Unmarshal(&request)
@@ -66,7 +66,7 @@ func (s *lobbyServiceHandlers) JoinRoomHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.JoinRoomRequest
 		err := msg.Unmarshal(&request)
@@ -96,7 +96,7 @@ func (s *lobbyServiceHandlers) LeaveRoomHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.LeaveRoomRequest
 		err := msg.Unmarshal(&request)
@@ -124,7 +124,7 @@ func (s *lobbyServiceHandlers) ListRoomsHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.ListRoomsRequest
 		err := msg.Unmarshal(&request)
@@ -149,7 +149,7 @@ func (s *lobbyServiceHandlers) RoomInfoHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.RoomInfoRequest
 		err := msg.Unmarshal(&request)
@@ -175,7 +175,7 @@ func (s *lobbyServiceHandlers) StartGameHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.StartGameRequest
 		err := msg.Unmarshal(&request)
@@ -212,7 +212,7 @@ func (s *lobbyServiceHandlers) PlayerReadyHandler() service.MessageHandler {
 		ctx, cancel := reqcontext.WithRequest(context.Background(), msg, defaultRequestTimeout)
 		defer cancel()
 
-		logger := reqcontext.ContextLogger(ctx, "name", serviceName)
+		logger := reqcontext.ContextLogger(ctx, "service_name", serviceName)
 
 		var request proto_lobby.PlayerReadyRequest
 		err := msg.Unmarshal(&request)

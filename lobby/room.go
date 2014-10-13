@@ -195,25 +195,17 @@ func (r *Room) Proto() *proto_lobby.Room {
 		Id:      pbuf.String(r.id.String()),
 		Name:    &r.name,
 		Options: r.options,
-		Owner:   fetchPlayerInfo(r.owner),
-		Players: fetchPlayersInfo(r.players),
+		Owner:   pbuf.String(r.owner.String()),
+		Players: toStringSlice(r.getNonOwnerUserIdsHelper()),
 	}
 }
 
-// TODO: real implementation should get nicknames from user service.
-func fetchPlayerInfo(userId user.Id) *proto_lobby.Player {
-	return &proto_lobby.Player{
-		UserId:   pbuf.String(userId.String()),
-		Nickname: pbuf.String(fmt.Sprintf("nickname %d", userId)),
+func toStringSlice(ids []user.Id) []string {
+	r := make([]string, 0, len(ids))
+	for _, id := range ids {
+		r = append(r, id.String())
 	}
-}
-
-func fetchPlayersInfo(userIds map[user.Id]string) []*proto_lobby.Player {
-	playerInfoList := make([]*proto_lobby.Player, 0, len(userIds))
-	for userId, _ := range userIds {
-		playerInfoList = append(playerInfoList, fetchPlayerInfo(userId))
-	}
-	return playerInfoList
+	return r
 }
 
 // ErrAlready started is returned by StartGame if the room game is already in progress

@@ -77,7 +77,7 @@ func (r *RoomList) JoinRoom(
 	}
 	log.Printf("User [id=%d] joined room [id=%s]", userId, room.id)
 	r.notifyAsync(&proto_lobby.JoinRoomEvent{
-		Player: fetchPlayerInfo(userId),
+		Player: pbuf.String(userId.String()),
 	}, usersInRoom...)
 	return room.Proto(), 0
 }
@@ -95,7 +95,7 @@ func (r *RoomList) LeaveRoom(userId user.Id) (bool, proto_lobby.LeaveRoomRespons
 	}
 	log.Printf("User [id=%d] left room [id=%s]", userId, room.id)
 	r.notifyAsync(&proto_lobby.JoinRoomEvent{
-		Player: fetchPlayerInfo(userId),
+		Player: pbuf.String(userId.String()),
 	}, room.GetUserIds()...)
 	return true, 0
 }
