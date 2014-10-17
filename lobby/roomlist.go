@@ -55,7 +55,7 @@ func (r *RoomList) CreateRoom(
 	r.roomsLock.Lock()
 	defer r.roomsLock.Unlock()
 	r.rooms[room.id] = room
-	log.Printf("User [id=%d] created a room [id=%s]", userId, room.id)
+	log.Printf("User [id=%s] created a room [id=%s]", userId, room.id)
 	return room.Proto(), 0
 }
 
@@ -75,7 +75,7 @@ func (r *RoomList) JoinRoom(
 	if err := room.Join(userId); err != nil {
 		return nil, proto_lobby.JoinRoomResponse_ROOM_FULL
 	}
-	log.Printf("User [id=%d] joined room [id=%s]", userId, room.id)
+	log.Printf("User [id=%s] joined room [id=%s]", userId, room.id)
 	r.notifyAsync(&proto_lobby.JoinRoomEvent{
 		Player: pbuf.String(userId.String()),
 	}, usersInRoom...)
@@ -93,7 +93,7 @@ func (r *RoomList) LeaveRoom(userId user.Id) (bool, proto_lobby.LeaveRoomRespons
 	if notEmpty, _ := room.Leave(userId); !notEmpty {
 		r.removeRoom(roomId)
 	}
-	log.Printf("User [id=%d] left room [id=%s]", userId, room.id)
+	log.Printf("User [id=%s] left room [id=%s]", userId, room.id)
 	r.notifyAsync(&proto_lobby.JoinRoomEvent{
 		Player: pbuf.String(userId.String()),
 	}, room.GetUserIds()...)
@@ -136,7 +136,7 @@ func (r *RoomList) StartGame(userId user.Id) error {
 	if room.GetOwner() != userId {
 		return ErrNotOwner
 	}
-	log.Printf("Owner [id=%d] started the game in room [id=%s]", userId, room.GetId())
+	log.Printf("Owner [id=%s] started the game in room [id=%s]", userId, room.GetId())
 	userState, err := room.StartGame()
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func (r *RoomList) StartGame(userId user.Id) error {
 
 func (r *RoomList) notifyGameStart(room *Room, userState map[user.Id]string) {
 	for _, userId := range room.GetNonOwnerUserIds() {
-		log.Printf("State for user [id=%d] is %s", userId, userState[userId])
+		log.Printf("State for user [id=%s] is %s", userId, userState[userId])
 		r.notifyAsync(&proto_lobby.StartGameEvent{
 			RoomId: pbuf.String(room.GetId().String()),
 			State:  pbuf.String(userState[userId]),
